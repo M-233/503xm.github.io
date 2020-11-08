@@ -1,0 +1,96 @@
+---
+title: "A7 Anly 503"
+output: html_document
+---
+### Xinyao Mo xm92
+```{r include=FALSE}
+library(tidyr)   # Data reshaping
+library(dplyr)   # Data manipulation
+library(ggplot2) # Graphs
+require(downloader)  
+library(dplyr)
+library(sqldf)
+library(reshape)
+library(stringr)
+library(tidyverse)
+library(xlsx)
+library(data.table)
+library(tibble)
+library(circlize)
+```
+
+
+### clean data
+```{r}
+m=readxl::read_excel("data/State_to_State_Migrations_Table_2018.xls",skip = 4,col_names = FALSE) 
+```
+
+```{r}
+m=m[1:73,]
+m=subset(m,select=-c(...2,...4,...6,...8))
+```
+```{r}
+#m1<-m[!(m$...1=="United States2"),]
+m1=m[which((m[3,] != "MOE"))]
+m2=m1[6:73,]
+m2=drop_na(m2)
+m3<-m2[!(m2$...10=="Estimate")&!(m2$...10=="Alabama"),]
+```
+
+```{r}
+#get state name
+state =data.frame( m   %>% .$...1 %>%as.vector)
+state=drop_na(state)
+state=data.frame(state[3:55 ,])
+#which(state=="Current residence in")
+state=data.frame(state[-28,])
+colnames(state)<-"state"
+state=state[1:51,]
+```
+
+```{r}
+#remove other countries or US Territories
+m3=subset(m3,select=-c(...123,...125,...127,...129))
+m3=m3[1:51,]
+```
+```{r include=FALSE}
+mdf=copy(m3)
+as.character(state)
+
+new_names <- as.character(state)
+
+mdf %>%
+  setnames(new_names)
+row.names(mdf)<-new_names
+```
+
+
+### reconstruct dataframe
+```{r}
+#reconstruct dataframe
+mdf2 = data.frame(reshape2::melt(as.matrix(mdf), value.name = "count", varnames=c('target', 'source')))
+mdf2[mdf2 == "N/A"] = 0
+mdf2$count = as.numeric(as.character(mdf2$count))
+```
+
+### Select state
+
+```{r}
+mdf3 = mdf2[mdf2$source %in% c("New York","Texas","California","Arizona"),]
+```
+```{r warning=FALSE}
+mdf4 = tibble::as_tibble(mdf3) %>%group_by(source) %>% arrange(count, .by_group = TRUE) %>%top_n(10)
+
+mdf4$target = state.abb[match(mdf4$target, state.name)]
+mdf4$source = state.abb[match(mdf4$source, state.name)]
+mdf4 = mdf4[,c("source","target","count")]
+
+```
+
+### Ploting
+```{r fig.height=10, fig.width=10,warning=FALSE}
+circos.clear()
+chordDiagram(mdf4,  annotationTrack = c("name", "grid"),
+             annotationTrackHeight = c(0.03, 0.01),transparency = 0.1,big.gap = 1)
+title("Migrations Network of \n New York, Texas, California and 		Arizona", cex = 0.8)
+```
